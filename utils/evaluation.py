@@ -2,6 +2,7 @@ import ast
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from tqdm.auto import tqdm
 
 def top_k_array_by_batch(id_concept_test_set, query_matrix, candidate_matrix, device, batch_size=100):
     ranks = []
@@ -76,7 +77,50 @@ def top_k_exp_by_batch(idx_true, query_matrix, candidate_matrix, device, batch_s
     return np.array(ranks)
 
 
-def top_k_array_syn(idx_syns_test, idx_syns, query_matrix, candidate_matrix, batch_size=512, device="cpu"):
+# def top_k_array_syn(idx_syns_test, idx_syns, query_matrix, candidate_matrix, batch_size=512, device="cpu"):
+#     """
+#     idx_syns: List[int] → correct target indices
+#     query_matrix: Tensor [num_queries, dim]
+#     candidate_matrix: Tensor [num_candidates, dim]
+#     batch_size: number of queries to process at a time
+#     device: 'cuda' or 'cpu'
+#     """
+#     if device is None:
+#         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#     ranks = []
+
+#     # Prepare tensors and move to device
+#     query_matrix = torch.tensor(query_matrix, dtype=torch.float32).to(device)
+#     candidate_matrix = torch.tensor(candidate_matrix, dtype=torch.float32).to(device)
+#     candidate_matrix_T = candidate_matrix.T  # (dim, num_candidates)
+#     idx_syns = torch.tensor(idx_syns, device=device)
+#     idx_syns_test_set = set(idx_syns_test)
+
+#     for i, idx_syn in enumerate(idx_syns):
+#         if i % 1000 == 0:
+#             print(i, "/", len(idx_syns))
+#         if idx_syn.item() in idx_syns_test_set:
+#             query = query_matrix[i]  # (batch_size, dim)
+
+#             # Compute scores for the batch
+#             scores = torch.matmul(query, candidate_matrix_T)  # (batch_size, num_candidates)
+
+#             # Sort each query's candidates
+#             sorted_indices = torch.argsort(scores, descending=True)
+
+#             # Find the rank of the correct label
+#             matches = sorted_indices == idx_syn  # (batch_size, num_candidates)
+#             batch_ranks = matches.float().argmax()  # (batch_size)
+
+#             ranks.append(np.array([batch_ranks.cpu().numpy()]))  # move back to CPU
+#         else:
+#             continue
+
+#     ranks = np.concatenate(ranks)
+#     return ranks
+
+def top_k_array_syn_by_batch(idx_syns_test, idx_syns, query_matrix, candidate_matrix, batch_size=512, device="cpu"):
     """
     idx_syns: List[int] → correct target indices
     query_matrix: Tensor [num_queries, dim]
@@ -89,35 +133,44 @@ def top_k_array_syn(idx_syns_test, idx_syns, query_matrix, candidate_matrix, bat
 
     ranks = []
 
+
+    # ensure the syn are in the test set
+    bool_test = [i in idx_syns_test for i in idx_syns]
+    query_matrix = query_matrix[bool_test]
+    idx_syns = np.array(idx_syns)[bool_test]
+
     # Prepare tensors and move to device
     query_matrix = torch.tensor(query_matrix, dtype=torch.float32).to(device)
     candidate_matrix = torch.tensor(candidate_matrix, dtype=torch.float32).to(device)
     candidate_matrix_T = candidate_matrix.T  # (dim, num_candidates)
     idx_syns = torch.tensor(idx_syns, device=device)
-    idx_syns_test_set = set(idx_syns_test)
 
-    for i, idx_syn in enumerate(idx_syns):
-        if i % 1000 == 0:
-            print(i, "/", len(idx_syns))
-        if idx_syn.item() in idx_syns_test_set:
-            query = query_matrix[i]  # (batch_size, dim)
+    num_concepts = len(idx_syns)
+    num_batches = (num_concepts + batch_size - 1) // batch_size
 
-            # Compute scores for the batch
-            scores = torch.matmul(query, candidate_matrix_T)  # (batch_size, num_candidates)
+    for batch_idx in range(num_batches):
+        start_idx = batch_idx * batch_size
+        end_idx = min(start_idx + batch_size, num_concepts)
+        batch_query = query_matrix[start_idx:end_idx]
+        batch_idx_syns = idx_syns[start_idx:end_idx]
+        print(f"Processing batch {batch_idx + 1}/{num_batches} ({start_idx}-{end_idx})")
 
-            # Sort each query's candidates
-            sorted_indices = torch.argsort(scores, descending=True)
+        # Compute scores for the batch
+        scores = torch.matmul(batch_query, candidate_matrix_T)  # (batch_size, num_candidates)
 
-            # Find the rank of the correct label
-            matches = sorted_indices == idx_syn  # (batch_size, num_candidates)
-            batch_ranks = matches.float().argmax()  # (batch_size)
+        # Sort each query's candidates
+        sorted_indices = torch.argsort(scores, descending=True)
 
-            ranks.append(np.array([batch_ranks.cpu().numpy()]))  # move back to CPU
-        else:
-            continue
+        # Find ranks
+        for i, test_idx in enumerate(batch_idx_syns):
+            pos = (sorted_indices[i] == test_idx).nonzero(as_tuple=True)[0]
+            if len(pos) > 0:
+                rank = pos[0].item()
+            else:
+                rank = -1
+            ranks.append(rank)
 
-    ranks = np.concatenate(ranks)
-    return ranks
+    return np.array(ranks)
 
 
 def compute_hierarchical_similarity(df_hierarchical_similarity, id2idx, mat_embedding):
@@ -159,14 +212,16 @@ def compute_hierarchical_similarity(df_hierarchical_similarity, id2idx, mat_embe
     accuracy = sum(accuracy_hierarchical_similarity) / len(accuracy_hierarchical_similarity)
     return accuracy
 
-
-def compute_semantic_composition(df_semantic_composition, id2idx, embeddings_exp_ft, list_idx_all_pre_set):
+def compute_semantic_composition(df_semantic_composition, id2idx, embeddings_exp_ft, list_idx_all_post_set, device):
     top_k_pre = []
     count = 0
+    embeddings_exp_ft = torch.tensor(embeddings_exp_ft, device=device)
+    embeddings_exp_ft[list(list_idx_all_post_set),: ] = 0
+
     for row in df_semantic_composition.iter_rows():
         count += 1
-        if count % 100 == 0:
-            print(f"Processing {count}/{len(df_semantic_composition)}")
+        
+        print(f"Processing {count}/{len(df_semantic_composition)}")
 
         anchor_id = str(row[0])
         if anchor_id not in id2idx:
@@ -179,7 +234,7 @@ def compute_semantic_composition(df_semantic_composition, id2idx, embeddings_exp
         except (ValueError, SyntaxError):
             continue
 
-        related_embedding = torch.zeros(embeddings_exp_ft.shape[1], device=embeddings_exp_ft.device)
+        related_embedding = torch.zeros(embeddings_exp_ft.shape[1], device=device)
         count_valid = 0
 
         for related_id in related_ids:
@@ -199,18 +254,16 @@ def compute_semantic_composition(df_semantic_composition, id2idx, embeddings_exp
         similarity_scores = torch.matmul(related_embedding, embeddings_exp_ft.T)
         sorted_indices = torch.argsort(similarity_scores, descending=True)
 
-        # Filter sorted indices for fully-defined and pre-defined
-        sorted_indices_pre = [idx.item() for idx in sorted_indices if idx.item() in list_idx_all_pre_set]
-
         try:
-            rank_pre = sorted_indices_pre.index(anchor_idx)
+            # rank_pre = sorted_indices_pre.index(anchor_idx)
+            rank_pre = (sorted_indices == anchor_idx).nonzero(as_tuple=True)[0].item()
+
         except ValueError:
             rank_pre = -1
 
         top_k_pre.append(rank_pre)
 
     return np.array(top_k_pre)
-
 
 def compute_hits_at_k(ranks, ks=np.arange(1,11)):
     ranks = np.array(ranks)
