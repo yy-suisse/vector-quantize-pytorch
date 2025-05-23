@@ -1,16 +1,18 @@
 import ast
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
-def top_k_array_by_batch(id_concept_test_set, query_matrix, candidate_matrix, batch_size=100):
+def top_k_array_by_batch(id_concept_test_set, query_matrix, candidate_matrix, device, batch_size=100):
     ranks = []
     id_concept_test = list(id_concept_test_set)
     num_concepts = len(id_concept_test)
     num_batches = (num_concepts + batch_size - 1) // batch_size
 
     # Move tensors to memory-efficient float32 if not already
-    query_matrix = torch.tensor(query_matrix, dtype=torch.float32)
-    candidate_matrix = torch.tensor(candidate_matrix, dtype=torch.float32)
+    query_matrix = torch.tensor(query_matrix, dtype=torch.float32).to(device)
+    candidate_matrix = torch.tensor(candidate_matrix, dtype=torch.float32).to(device)
+    # Precompute transpose for efficiency
 
     candidate_matrix_T = candidate_matrix.T  # Precompute transpose
 
@@ -208,3 +210,33 @@ def compute_semantic_composition(df_semantic_composition, id2idx, embeddings_exp
         top_k_pre.append(rank_pre)
 
     return np.array(top_k_pre)
+
+
+def compute_hits_at_k(ranks, ks=np.arange(1,11)):
+    ranks = np.array(ranks)
+    return np.array([(ranks < k).mean() for k in ks]), ks
+
+def plot_hits_at_k(model_ranks, title, type = None):
+    plt.figure(figsize=(10, 5))
+
+    for model_name in model_ranks.keys():
+        if type:
+            top_k_accuracy , ks = compute_hits_at_k(model_ranks[model_name][type])
+        else:
+            top_k_accuracy, ks = compute_hits_at_k(model_ranks[model_name])
+        plt.plot(ks, top_k_accuracy, label=model_name)
+
+    plt.xticks(ks)
+    plt.xlabel("k")
+    plt.ylabel("Hit at k")
+    plt.legend()
+    plt.title(title + ": Hits@k Comparison")
+    # Move legend outside
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+
+    plt.tight_layout()  # Adjust layout to not cut off labels
+    plt.show()
+
+def compute_mmr(ranks):
+    reciprocal_ranks = 1/(ranks + 1)
+    return reciprocal_ranks.mean()
