@@ -11,6 +11,7 @@ FILE_CONFIG = {
     "new_exp_embedding_save_path": "D:/lora_finetune_eval/new_exp_embedding_by_model/",
     "embedding_icd_snomed_save_path": "D:/lora_finetune_eval/embedding_icd_snomed_by_model/",
 
+    "model_q_save_path": "D:/lora_finetune_eval/quantizer_models/sapbert_lora_triplet16/",
     "embedding_q_save_path": "D:/lora_finetune_eval/embedding_by_model/quantized/",
     "syn_embedding_q_save_path": "D:/lora_finetune_eval/syn_embedding_by_model/quantized/",
     "new_exp_embedding_q_save_path": "D:/lora_finetune_eval/new_exp_embedding_by_model/quantized/",
