@@ -5,16 +5,22 @@ FILE_CONFIG = {
     "training_triplet_idx": "D:/lora_finetune_eval/basic_info/training_anchor_idx_1M.parquet",
 
     "icd_snomed" : "D:/lora_finetune_eval/icd_snomed/",
+    "benchmark": "D:/lora_finetune_eval/benchmark_jamil/",
+
 
     "embedding_save_path": "D:/lora_finetune_eval/embedding_by_model/",
     "syn_embedding_save_path": "D:/lora_finetune_eval/syn_embedding_by_model/",
     "new_exp_embedding_save_path": "D:/lora_finetune_eval/new_exp_embedding_by_model/",
     "embedding_icd_snomed_save_path": "D:/lora_finetune_eval/embedding_icd_snomed_by_model/",
+    "result_save_path": "D:/lora_finetune_eval/result_by_model/",
+
 
     "model_q_save_path": "D:/lora_finetune_eval/quantizer_models/sapbert_lora_triplet16/",
     "embedding_q_save_path": "D:/lora_finetune_eval/embedding_by_model/quantized/",
     "syn_embedding_q_save_path": "D:/lora_finetune_eval/syn_embedding_by_model/quantized/",
     "new_exp_embedding_q_save_path": "D:/lora_finetune_eval/new_exp_embedding_by_model/quantized/",
-    "embedding_q_icd_snomed_save_path": "D:/lora_finetune_eval/embedding_icd_snomed_by_model/quantized/"
+    "embedding_q_icd_snomed_save_path": "D:/lora_finetune_eval/embedding_icd_snomed_by_model/quantized/",
+    "result_q_save_path": "D:/lora_finetune_eval/result_by_model_q/",
+
 
 }

@@ -2,7 +2,7 @@ import ast
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from tqdm.auto import tqdm
+import torch.nn.functional as F
 
 def top_k_array_by_batch(id_concept_test_set, query_matrix, candidate_matrix, device, batch_size=100):
     ranks = []
@@ -293,3 +293,29 @@ def plot_hits_at_k(model_ranks, title, type = None):
 def compute_mmr(ranks):
     reciprocal_ranks = 1/(ranks + 1)
     return reciprocal_ranks.mean()
+
+def get_similarity_score_icd2snomed(icd_embeddings, snomed_embeddings, icd2snomed):
+    """
+    Calculate the similarity score between ICD and SNOMED embeddings.
+    """
+    cosine_sim_all = []
+    for icd in icd2snomed.keys():
+        icd_embedding = icd_embeddings[int(icd)]
+        snomed_embedding = snomed_embeddings[icd2snomed[icd]]
+
+        cosine_sim = F.cosine_similarity(icd_embedding, snomed_embedding.mean(dim=0), dim=0)
+        cosine_sim_all.append(1-cosine_sim.item())
+    return np.array(cosine_sim_all)
+
+def get_similarity_score_snomed2icd(icd_embeddings, snomed_embeddings, snomed2icd):
+    """
+    Calculate the similarity score between ICD and SNOMED embeddings.
+    """
+    cosine_sim_all = []
+    for icd in snomed2icd.keys():
+        snomed_embedding = snomed_embeddings[int(icd)]
+        icd_embedding = icd_embeddings[int(snomed2icd[icd][0])]
+
+        cosine_sim = F.cosine_similarity(snomed_embedding, icd_embedding.mean(dim=0), dim=0)
+        cosine_sim_all.append(1-cosine_sim.item())
+    return np.array(cosine_sim_all)
